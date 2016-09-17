@@ -186,11 +186,11 @@ cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &
     const int dt = 2;
     pyrDown(intensity, in);
 
-    const int thresh = 180;
+    const int thresh = 80;
 
     int score = 0;
     int mrgx = 5;
-    int mrgy = 5;
+    int mrgy = 0;
 
 
     for(int x = mrgx; x < in.cols - mrgx; x++) {
@@ -238,8 +238,8 @@ void matchLines(cv::Mat _eye, std::string window_name, cv::Point globalOffset) {
     for(int i = 0; i < eye.rows; i++) {
         for(int j = 0; j < eye.cols; j++) {
             //res.at<uchar>(i, j) = //255 - channels[2].at<uchar>(i, j);
-            //    ((float)channels[1].at<uchar>(i, j) / 255)
-            //    * (1 - (float)channels[2].at<uchar>(i, j) / 255) * 255; 
+            //    ((float)channels2[1].at<uchar>(i, j) / 255)
+            //    * (1 - (float)channels2[2].at<uchar>(i, j) / 255) * 255; 
             //if(channels[0].at<uchar>(i, j) < channels[1].at<uchar>(i, j)) {
             //    res.at<uchar>(i, j) = 0;
             //} else {
