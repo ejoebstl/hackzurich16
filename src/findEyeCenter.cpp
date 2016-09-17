@@ -244,7 +244,9 @@ cv::Rect findEyeCenter(cv::Mat face, cv::Mat face_color, cv::Rect eye, std::stri
   std::cout << "weight circle: " << circle << std::endl;
   cv::circle(weight, cv::Point(circle[0], circle[1]), circle[2], 255, 1);
 
-  imshow(debugWindow,weight);
+  if(kEnableDebug) {
+    imshow(debugWindow,weight);
+  }
 
   cv::Rect region(circle[0] - circle[2], circle[1] - circle[2], circle[2] * 2, circle[2] * 2); 
 

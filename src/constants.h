@@ -1,6 +1,8 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+const bool kEnableDebug = false;
+
 // Debugging
 const bool kPlotVectorField = false;
 
