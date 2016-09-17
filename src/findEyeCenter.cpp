@@ -74,6 +74,61 @@ cv::Mat computeMatXGradient(const cv::Mat &mat) {
 
 #pragma mark Main Algorithm
 
+float pxThresh2(cv::Mat img, int cx, int cy, int r1, int r2, int low, int high) {
+   int ct = 0;
+   int match = 0;
+   for(int x = cx - r2; x < cx + r2; x++) {
+       for(int y = cy - r2; y < cy + r2; y++) {
+            if(x >= 0 && y >= 0 && x < img.cols && y < img.rows) {
+                int dist = ((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                if(dist <= r2 * r2 && dist >= r1 * r1) {
+                    uchar intensity = img.at<uchar>(y, x);
+                    if(intensity >= low && intensity <= high) {
+                        match += 2;
+                    } else {
+                        match--;
+                    }
+                    ct++;
+                }
+            }
+       }
+   }
+   return match; 
+}
+
+cv::Vec3f matchCircleBf2(cv::Mat intensity, int thresh) {
+
+    if(intensity.rows > 50)
+        return cv::Vec3f(0, 0, 0);
+
+    assert(intensity.type() == CV_8UC1);
+
+    cv::Mat in;
+    pyrDown(intensity, in);
+
+    float max = 0;
+    int mx = -1, my = -1, mr1 = 0, mr2 = 0;
+
+    int marg = intensity.rows / 8;
+
+    for(int r2 = 1; r2 < in.rows / 2.1; r2++) {
+        for(int x = r2 + marg; x < in.cols - r2 - marg; x++) {
+            for(int y = r2 + marg; y < in.rows - r2 - marg; y++) {
+               float v = 
+                   pxThresh2(in, x, y, 0, r2, thresh, 255);
+
+               if(v > max) {
+                    max = v;
+                    mx = x;
+                    my = y;
+                    mr2 = r2;
+               }
+            }
+        }
+    }
+   
+    return cv::Vec3f(mx * 2, my * 2, mr2 * 2); 
+}
 void testPossibleCentersFormula(int x, int y, const cv::Mat &weight,double gx, double gy, cv::Mat &out) {
   // for all possible centers
   for (int cy = 0; cy < out.rows; ++cy) {
@@ -102,10 +157,12 @@ void testPossibleCentersFormula(int x, int y, const cv::Mat &weight,double gx, d
   }
 }
 
-cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
+cv::Rect findEyeCenter(cv::Mat face, cv::Mat face_color, cv::Rect eye, std::string debugWindow) {
   cv::Mat eyeROIUnscaled = face(eye);
-  cv::Mat eyeROI;
+  cv::Mat eyeROI, eyeROIColorScaled;
+  cv::Mat eyeROIColor = face_color(eye);
   scaleToFastSize(eyeROIUnscaled, eyeROI);
+  scaleToFastSize(eyeROIColor, eyeROIColorScaled);
   // draw eye region
   rectangle(face,eye,1234);
   //-- Find the gradient
@@ -134,7 +191,7 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
       }
     }
   }
-  imshow(debugWindow,gradientX);
+  //imshow(debugWindow,gradientX);
   //-- Create a blurred and inverted image for weighting
   cv::Mat weight;
   GaussianBlur( eyeROI, weight, cv::Size( kWeightBlurSize, kWeightBlurSize ), 0, 0 );
@@ -144,7 +201,9 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
       row[x] = (255 - row[x]);
     }
   }
-  //imshow(debugWindow,weight);
+
+
+  //imshow(debugWindow,eyeROIColor);
   //-- Run the algorithm!
   cv::Mat outSum = cv::Mat::zeros(eyeROI.rows,eyeROI.cols,CV_64F);
   // for each possible gradient location
@@ -162,6 +221,7 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
       testPossibleCentersFormula(x, y, weight, gX, gY, outSum);
     }
   }
+
   // scale all the values down, basically averaging them
   double numGradients = (weight.rows*weight.cols);
   cv::Mat out;
@@ -171,6 +231,44 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
   cv::Point maxP;
   double maxVal;
   cv::minMaxLoc(out, NULL,&maxVal,NULL,&maxP);
+
+  // Seperating stuff. 
+  uchar center = weight.at<uchar>(maxP.y, maxP.x);
+  const uchar t = 50;
+  cv::Mat whsl;
+  cv::cvtColor(eyeROIColorScaled, whsl, cv::COLOR_BGR2HSV);
+
+
+  cv::Vec3f circle = matchCircleBf2(weight, center - t);
+  std::cout << "weight circle: " << circle << std::endl;
+  cv::circle(weight, cv::Point(circle[0], circle[1]), circle[2], 255, 1);
+
+  imshow(debugWindow,weight);
+
+  cv::Rect region(circle[0] - circle[2], circle[1] - circle[2], circle[2] * 2, circle[2] * 2); 
+
+  //if(region.width <= 0 || region.height <= 0) {
+  //  region = cv::Rect(maxP, cv::Size(1, 1));
+  //}
+
+  /*
+  for(int i = 0; i < weight.rows; i++) {
+      for(int j = 0; j < weight.cols; j++) {
+          if(std::abs(weight.at<uchar>(i, j) - center) > t) {
+          //cv::Vec3b color = whsl.at<cv::Vec3b>(i, j);
+          //if(color[1] < 40) {
+              weight.at<uchar>(i, j) = 0;
+          } else {
+              weight.at<uchar>(i, j) = 255;
+          }
+      }
+  }
+
+
+  cv::floodFill(weight, maxP, 1, &region);
+  cv::rectangle(eyeROIColorScaled, region.tl(), region.br(), cv::Scalar(0, 0, 255), 1);
+  */
+
   //-- Flood fill the edges
   if(kEnablePostProcess) {
     cv::Mat floodClone;
@@ -187,7 +285,8 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
     // redo max
     cv::minMaxLoc(out, NULL,&maxVal,NULL,&maxP,mask);
   }
-  return unscalePoint(maxP,eye);
+
+  return cv::Rect(unscalePoint(region.tl(), eye), unscalePoint(region.br(), eye));
 }
 
 #pragma mark Postprocessing
