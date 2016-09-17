@@ -119,6 +119,34 @@ struct MeasureInfo {
     }
 };
 
+cv::Rect Median(std::deque<cv::Rect> in) {
+    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
+                return a.x < b.x;
+            }); 
+
+    int x = in[in.size() / 2].x;
+    
+    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
+                return a.y < b.y;
+            }); 
+
+    int y = in[in.size() / 2].y;
+    
+    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
+                return a.width < b.width;
+            }); 
+
+    int width = in[in.size() / 2].width;
+    
+    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
+                return a.height < b.height;
+            }); 
+
+    int height = in[in.size() / 2].height;
+
+    return cv::Rect(x, y, width, height);
+}
+
 MeasureInfo pxThresh(cv::Mat img, int cx, int cy, int r1, int r2, int low, int high) {
    int match = 0;
 
@@ -154,7 +182,8 @@ cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &
 
     assert(intensity.type() == CV_8UC1);
 
-    cv::Mat in;
+    cv::Mat in; 
+    const int dt = 2;
     pyrDown(intensity, in);
 
     const int thresh = 180;
@@ -189,8 +218,11 @@ cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &
         }
     }
 
-    return cv::Vec4b(bestLarge.x * 2, bestLarge.y * 2, bestLarge.r2 * 2, bestLarge.r1 * 2); 
+    return cv::Vec4b(bestLarge.x * dt, bestLarge.y * dt, bestLarge.r2 * dt, bestLarge.r1 * dt); 
 }
+
+std::deque<cv::Rect> left_pupils;
+std::deque<cv::Rect> right_pupils;
 
 void matchLines(cv::Mat _eye, std::string window_name) {
     if(_eye.rows == 0)
@@ -309,6 +341,7 @@ void matchLines(cv::Mat _eye, std::string window_name) {
     cv::imshow(window_name, mix);
 }
 
+
 void findEyes(cv::Mat frame_gray, cv::Mat frame_color, cv::Rect face) {
   cv::Mat faceROI = frame_gray(face);
   cv::Mat colorFaceROI = frame_color(face);
@@ -330,6 +363,27 @@ void findEyes(cv::Mat frame_gray, cv::Mat frame_color, cv::Rect face) {
   //-- Find Eye Centers
   cv::Rect leftPupil = findEyeCenter(faceROI, colorFaceROI, leftEyeRegion,"Left Eye");
   cv::Rect rightPupil = findEyeCenter(faceROI, colorFaceROI, rightEyeRegion,"Right Eye");
+
+  if(leftPupil.width != 0)
+      left_pupils.push_back(leftPupil);
+
+  if(rightPupil.width != 0)
+      right_pupils.push_back(rightPupil);
+
+  if(left_pupils.size() == 0 || right_pupils.size() == 0)
+      return;
+
+  const int median_count = 5;
+
+  if(left_pupils.size() > median_count)
+      left_pupils.pop_front();
+  
+  if(right_pupils.size() > median_count)
+      right_pupils.pop_front();
+
+  leftPupil = Median(left_pupils);
+  rightPupil = Median(right_pupils);
+
   // get corner regions
   cv::Rect leftRightCornerRegion(leftEyeRegion);
   leftRightCornerRegion.width -= leftPupil.x;
@@ -363,7 +417,7 @@ void findEyes(cv::Mat frame_gray, cv::Mat frame_color, cv::Rect face) {
   rectangle(debugFace, leftPupil, 255, 1);
 
   const float widthExt = 5;
-  const float heightExt = -5;
+  const float heightExt = 5;
 
   leftPupil = cv::Rect(leftPupil.x - widthExt, leftPupil.y - heightExt, leftPupil.width + widthExt * 2, leftPupil.height + heightExt * 2);
   rightPupil = cv::Rect(rightPupil.x - widthExt, rightPupil.y - heightExt, rightPupil.width + widthExt * 2, rightPupil.height + heightExt * 2);
