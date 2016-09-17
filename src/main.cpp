@@ -151,12 +151,12 @@ MeasureInfo pxThresh(cv::Mat img, int cx, int cy, int r1, int r2, int low, int h
 }
 
 void matchRadius(cv::Mat &in, MeasureInfo &bestSmall, MeasureInfo &bestLarge, int &score, int x, int y, int thresh) {
-    for(int r1 = 1; r1 < in.rows / 4; r1++) {
-        for(int r2 = r1; r2 < in.rows / 1.5; r2++) {
+    for(int r1 = 1; r1 < in.rows / 5; r1++) {
+        for(int r2 = r1; r2 < in.rows / 2.1; r2++) {
            MeasureInfo large = pxThresh(in, x, y, r1, r2, thresh, 255);
            MeasureInfo small = pxThresh(in, x, y, 0, r1, 0, thresh);
 
-           if(score < large.score + small.score) {
+           if(score < large.score + small.score * 2) {
                bestLarge = large;
                bestSmall = small;
                bestLarge.x = x;
@@ -167,7 +167,7 @@ void matchRadius(cv::Mat &in, MeasureInfo &bestSmall, MeasureInfo &bestLarge, in
                bestSmall.y = y;
                bestSmall.r1 = r1;
                bestSmall.r2 = r2;
-               score = large.score + small.score;
+               score = large.score + small.score * 2;
            } 
         }
     }
@@ -413,7 +413,7 @@ void findEyes(cv::Mat frame_gray, cv::Mat frame_color, cv::Rect face) {
   rectangle(debugFace, leftPupil, 255, 1);
 
   const float widthExt = 5;
-  const float heightExt = 5;
+  const float heightExt = 0;
 
   leftPupil = cv::Rect(leftPupil.x - widthExt, leftPupil.y - heightExt, leftPupil.width + widthExt * 2, leftPupil.height + heightExt * 2);
   rightPupil = cv::Rect(rightPupil.x - widthExt, rightPupil.y - heightExt, rightPupil.width + widthExt * 2, rightPupil.height + heightExt * 2);
