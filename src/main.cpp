@@ -9,8 +9,10 @@
 #include <chrono>
 
 #include "constants.h"
+#include "common.hpp"
 #include "findEyeCenter.h"
 #include "findEyeCorner.h"
+
 
 
 /** Constants **/
@@ -120,34 +122,6 @@ struct MeasureInfo {
     }
 };
 
-cv::Rect Median(std::deque<cv::Rect> in) {
-    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
-                return a.x < b.x;
-            }); 
-
-    int x = in[in.size() / 2].x;
-    
-    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
-                return a.y < b.y;
-            }); 
-
-    int y = in[in.size() / 2].y;
-    
-    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
-                return a.width < b.width;
-            }); 
-
-    int width = in[in.size() / 2].width;
-    
-    std::sort(in.begin(), in.end(), [](const cv::Rect &a, const cv::Rect &b) {
-                return a.height < b.height;
-            }); 
-
-    int height = in[in.size() / 2].height;
-
-    return cv::Rect(x, y, width, height);
-}
-
 MeasureInfo pxThresh(cv::Mat img, int cx, int cy, int r1, int r2, int low, int high) {
    int match = 0;
 
@@ -171,12 +145,37 @@ MeasureInfo pxThresh(cv::Mat img, int cx, int cy, int r1, int r2, int low, int h
        }
    }
    info.avg = (double)info.sum / (double)info.count;
-   info.score = info.matches * 2 - info.rejects;
+   info.score = info.matches * 4 - info.rejects;
 
    return info; 
 }
 
-cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &bestLarge) {
+void matchRadius(cv::Mat &in, MeasureInfo &bestSmall, MeasureInfo &bestLarge, int &score, int x, int y, int thresh) {
+    for(int r1 = 1; r1 < in.rows / 4; r1++) {
+        for(int r2 = r1; r2 < in.rows / 1.5; r2++) {
+           MeasureInfo large = pxThresh(in, x, y, r1, r2, thresh, 255);
+           MeasureInfo small = pxThresh(in, x, y, 0, r1, 0, thresh);
+
+           if(score < large.score) {
+               bestLarge = large;
+               bestSmall = small;
+               bestLarge.x = x;
+               bestLarge.y = y;
+               bestLarge.r1 = r1;
+               bestLarge.r2 = r2;
+               bestSmall.x = x;
+               bestSmall.y = y;
+               bestSmall.r1 = r1;
+               bestSmall.r2 = r2;
+               score = large.score;
+           } 
+        }
+    }
+}
+
+std::deque<cv::Point> eyeCenterThesis;
+
+cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &bestLarge, cv::Point globalOffset) {
 
     if(intensity.rows > 50)
         return cv::Vec4b(0, 0, 0, 0);
@@ -196,28 +195,24 @@ cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &
 
     for(int x = mrgx; x < in.cols - mrgx; x++) {
         for(int y = mrgy; y < in.rows - mrgy; y++) {
-            for(int r1 = 1; r1 < in.rows / 4; r1++) {
-                for(int r2 = r1; r2 < in.rows / 1.5; r2++) {
-                   MeasureInfo large = pxThresh(in, x, y, r1, r2, thresh, 255);
-                   MeasureInfo small = pxThresh(in, x, y, 0, r1, 0, thresh);
-
-                   if(score < large.score) {
-                       bestLarge = large;
-                       bestSmall = small;
-                       bestLarge.x = x;
-                       bestLarge.y = y;
-                       bestLarge.r1 = r1;
-                       bestLarge.r2 = r2;
-                       bestSmall.x = x;
-                       bestSmall.y = y;
-                       bestSmall.r1 = r1;
-                       bestSmall.r2 = r2;
-                       score = large.score;
-                   } 
-                }
-            }
+            matchRadius(in, bestSmall, bestLarge, score, x, y, thresh);
         }
     }
+
+    //eyeCenterThesis.push_back(cv::Point(bestLarge.x, bestLarge.y) + globalOffset);
+
+    //while(eyeCenterThesis.size() > 3) {
+    //    eyeCenterThesis.pop_front();
+    //}
+
+    //cv::Point center = Median(eyeCenterThesis) - globalOffset;
+
+    //if(center.x < in.cols && center.y < in.rows && center.y >= 0 && center.x >= 0) {
+    //    score = 0;
+    //    matchRadius(in, bestSmall, bestLarge, score, center.x, center.y, thresh);
+    //} else {
+    //    std::cout << "Discard Thesis " << center << std::endl;
+    //}
 
     return cv::Vec4b(bestLarge.x * dt, bestLarge.y * dt, bestLarge.r2 * dt, bestLarge.r1 * dt); 
 }
@@ -225,7 +220,7 @@ cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &
 std::deque<cv::Rect> left_pupils;
 std::deque<cv::Rect> right_pupils;
 
-void matchLines(cv::Mat _eye, std::string window_name) {
+void matchLines(cv::Mat _eye, std::string window_name, cv::Point globalOffset) {
     if(_eye.rows == 0)
         return; 
 
@@ -265,7 +260,7 @@ void matchLines(cv::Mat _eye, std::string window_name) {
 
     MeasureInfo bestSmall, bestLarge; 
 
-    cv::Vec4b circle = matchCircleBf(res, bestLarge, bestSmall);
+    cv::Vec4b circle = matchCircleBf(res, bestLarge, bestSmall, globalOffset);
 
         using namespace std::chrono;
         long ms = duration_cast< milliseconds >(
@@ -366,15 +361,15 @@ void findEyes(cv::Mat frame_gray, cv::Mat frame_color, cv::Rect face) {
   cv::Rect rightPupil = findEyeCenter(faceROI, colorFaceROI, rightEyeRegion,"Right Eye");
 
   if(leftPupil.width != 0)
-      left_pupils.push_back(leftPupil);
+      left_pupils.push_back(leftPupil + face.tl());
 
   if(rightPupil.width != 0)
-      right_pupils.push_back(rightPupil);
+      right_pupils.push_back(rightPupil + face.tl());
 
   if(left_pupils.size() == 0 || right_pupils.size() == 0)
       return;
 
-  const int median_count = 5;
+  const int median_count = 10;
 
   if(left_pupils.size() > median_count)
       left_pupils.pop_front();
@@ -382,8 +377,8 @@ void findEyes(cv::Mat frame_gray, cv::Mat frame_color, cv::Rect face) {
   if(right_pupils.size() > median_count)
       right_pupils.pop_front();
 
-  leftPupil = Median(left_pupils);
-  rightPupil = Median(right_pupils);
+  leftPupil = Median(left_pupils) - face.tl();
+  rightPupil = Median(right_pupils) - face.tl();
 
   // get corner regions
   cv::Rect leftRightCornerRegion(leftEyeRegion);
@@ -431,14 +426,14 @@ void findEyes(cv::Mat frame_gray, cv::Mat frame_color, cv::Rect face) {
   //        cv::Scalar(0, 255, 0), 1);
 
   if(leftPupil.width > 0 && leftPupil.height > 0) 
-      matchLines(frame_color(leftPupil), "left_pupil");
+      matchLines(frame_color(leftPupil), "left_pupil", leftPupil.tl());
 
   //rectangle(frame_color, 
   //        rightPupil,
   //        cv::Scalar(0, 255, 0), 1);
   
   if(rightPupil.width > 0 && rightPupil.height > 0) 
-      matchLines(frame_color(rightPupil), "right_pupil");
+      matchLines(frame_color(rightPupil), "right_pupil", rightPupil.tl());
   
   //-- Find Eye Corners
   /*

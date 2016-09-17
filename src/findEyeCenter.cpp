@@ -10,6 +10,7 @@
 
 #include "constants.h"
 #include "helpers.h"
+#include "common.hpp"
 
 // Pre-declarations
 cv::Mat floodKillEdges(cv::Mat &mat);
