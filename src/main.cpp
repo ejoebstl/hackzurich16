@@ -156,7 +156,7 @@ void matchRadius(cv::Mat &in, MeasureInfo &bestSmall, MeasureInfo &bestLarge, in
            MeasureInfo large = pxThresh(in, x, y, r1, r2, thresh, 255);
            MeasureInfo small = pxThresh(in, x, y, 0, r1, 0, thresh);
 
-           if(score < large.score) {
+           if(score < large.score + small.score) {
                bestLarge = large;
                bestSmall = small;
                bestLarge.x = x;
@@ -167,7 +167,7 @@ void matchRadius(cv::Mat &in, MeasureInfo &bestSmall, MeasureInfo &bestLarge, in
                bestSmall.y = y;
                bestSmall.r1 = r1;
                bestSmall.r2 = r2;
-               score = large.score;
+               score = large.score + small.score;
            } 
         }
     }
