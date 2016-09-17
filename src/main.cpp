@@ -160,16 +160,16 @@ cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &
     const int thresh = 180;
 
     int score = 0;
-    int mrgx = 0;
-    int mrgy = 0;
+    int mrgx = 5;
+    int mrgy = 5;
 
 
     for(int x = mrgx; x < in.cols - mrgx; x++) {
         for(int y = mrgy; y < in.rows - mrgy; y++) {
             for(int r1 = 1; r1 < in.rows / 4; r1++) {
                 for(int r2 = r1; r2 < in.rows / 1.5; r2++) {
-                   MeasureInfo small = pxThresh(in, x, y, r1, r2, thresh, 255);
-                   MeasureInfo large = pxThresh(in, x, y, 0, r1, 0, thresh);
+                   MeasureInfo large = pxThresh(in, x, y, r1, r2, thresh, 255);
+                   MeasureInfo small = pxThresh(in, x, y, 0, r1, 0, thresh);
 
                    if(score < large.score) {
                        bestLarge = large;
@@ -189,7 +189,7 @@ cv::Vec4b matchCircleBf(cv::Mat intensity, MeasureInfo &bestSmall, MeasureInfo &
         }
     }
 
-    return cv::Vec4b(bestLarge.x, bestLarge.y, bestLarge.r2, bestLarge.r1); 
+    return cv::Vec4b(bestLarge.x * 2, bestLarge.y * 2, bestLarge.r2 * 2, bestLarge.r1 * 2); 
 }
 
 void matchLines(cv::Mat _eye, std::string window_name) {
@@ -221,9 +221,9 @@ void matchLines(cv::Mat _eye, std::string window_name) {
                 std::min(255, std::max(0, 
                             (int)channels[1].at<uchar>(i, j) - 
                             (int)channels[0].at<uchar>(i, j) + 128));
-            //if(channels[2].at<uchar>(i, j) < 60) {
-            //    res.at<uchar>(i, j) = 255;
-            //}
+            if(channels2[2].at<uchar>(i, j) > 100) {
+                res.at<uchar>(i, j) = 0;
+            }
         }
     }
     equalizeHist(res, res);
@@ -234,7 +234,13 @@ void matchLines(cv::Mat _eye, std::string window_name) {
 
     cv::Vec4b circle = matchCircleBf(res, bestLarge, bestSmall);
 
+        using namespace std::chrono;
+        long ms = duration_cast< milliseconds >(
+            system_clock::now().time_since_epoch()
+        ).count();
+
     std::cout << window_name << ", " <<
+        ms << ", " <<
         bestLarge.x << ", " <<
         bestLarge.y << ", " <<
         bestLarge.r1 << ", " <<
@@ -250,10 +256,6 @@ void matchLines(cv::Mat _eye, std::string window_name) {
 
     for( size_t i = 0; i < circles.size(); i++ )
     {
-        using namespace std::chrono;
-        long ms = duration_cast< milliseconds >(
-            system_clock::now().time_since_epoch()
-        ).count();
         cv::Point center(circles[i][0], circles[i][1]);
         int radius = circles[i][2];
         cv::circle(res, center, 1, 255, -1, 8, 0);
