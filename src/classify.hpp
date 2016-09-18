@@ -12,6 +12,7 @@
 #include "helpers.hpp"
 #include "common.hpp"
 #include "findEyeCenter.hpp"
+#include "../res/haarcascade_frontalface_alt.hpp"
 
 /** Constants **/
 
@@ -30,17 +31,19 @@ struct MeasureInfo {
 
 /** Global variables */
 //-- Note, either copy these two files from opencv/data/haarscascades to your current folder, or change these locations
-cv::String face_cascade_name = "res/haarcascade_frontalface_alt.xml";
 cv::CascadeClassifier face_cascade;
-std::string main_window_name = "Capture - Face detection";
-std::string face_window_name = "Capture - Face";
-cv::RNG rng(12345);
-cv::Mat debugImage;
-cv::Mat skinCrCbHist = cv::Mat::zeros(cv::Size(256, 256), CV_8UC1);
+#define main_window_name "Capture - Face detection"
+#define face_window_name "Capture - Face"
+cv::Mat skinCrCbHist;
 
 void ClassifyInit() {
+    //cv::CascadeClassifier::convert("res/haarcascade_frontalface_alt.xml", "res/haarcascade_frontalface_new.xml");
   // Load the cascades
-  if( !face_cascade.load( face_cascade_name ) ){ printf("--(!)Error loading face cascade, please change face_cascade_name in source code.\n"); return; };
+  cv::FileStorage fs( cv::String((const char*)haarcascade_frontalface_new_xml, haarcascade_frontalface_new_xml_len), cv::FileStorage::READ | cv::FileStorage::MEMORY);
+
+  skinCrCbHist = cv::Mat::zeros(cv::Size(256, 256), CV_8UC1);
+
+  face_cascade.read(fs.getFirstTopLevelNode());
 
   if(kEnableDebug) {
       cv::namedWindow("left_pupil",CV_WINDOW_NORMAL);
@@ -445,10 +448,12 @@ void detectAndDisplay(cv::Mat frame, MeasureInfo &leftSmall, MeasureInfo &leftLa
   face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|CV_HAAR_SCALE_IMAGE|CV_HAAR_FIND_BIGGEST_OBJECT, cv::Size(150, 150) );
 //  findSkin(debugImage);
 
+  /*
   for( int i = 0; i < faces.size(); i++ )
   {
+    cv::Mat debugImage;
     rectangle(debugImage, faces[i], 1234);
-  }
+  }*/
   //-- Show what you got
   if (faces.size() > 0) {
     findEyes(frame_gray, frame, faces[0], leftSmall, leftLarge, rightSmall, rightLarge);
